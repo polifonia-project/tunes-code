@@ -44,6 +44,7 @@ def sseDist(v1, v2):
 def computeConsonance(
     song : Song, 
     wpc : PitchContext,
+    combiner=np.maximum,
     consonants40 = [0, 11, 12, 17, 23, 28, 29]
 ):
     """
@@ -55,6 +56,9 @@ def computeConsonance(
         An instance of the Song class.
     wpd : WeightedPitchContext
         An instance of the WeightedPitchContext class, containing a weighted pitch context vector for each note.
+    combiner : function of two 1D numpy arrays, default=numpy.maximum
+        Combines the consonance of preceeding context and consonance of following context in one value.
+        Default: take the maximum.
     consonants : list of ints
         Intervals in base40 pitch encoding that are considered consonant.
     
@@ -87,13 +91,15 @@ def computeConsonance(
         intervals_pre  = np.roll(context[:40], -pitch40)
         intervals_post = np.roll(context[40:], -pitch40)
 
-        consonance_pre[ix] = sum(np.multiply(intervals_pre, consonants))
-        consonance_post[ix] = sum(np.multiply(intervals_post, consonants))
+        consonance_pre[ix] = np.sum(np.multiply(intervals_pre, consonants))
+        consonance_post[ix] = np.sum(np.multiply(intervals_post, consonants))
 
     #normalize
     #consonance_pre = consonance_pre / np.sum(consonance_pre)
     #consonance_post = consonance_post / np.sum(consonance_post)
-    consonance_context = (consonance_pre + consonance_post) * 0.5
+
+    #combine pre and post context
+    consonance_context = combiner(consonance_pre, consonance_post)
 
     return consonance_pre, consonance_post, consonance_context
 
