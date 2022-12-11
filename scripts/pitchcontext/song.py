@@ -2,6 +2,7 @@ import copy
 from fractions import Fraction
 from math import gcd
 import subprocess
+import tempfile
 import os
 
 import numpy as np
@@ -42,7 +43,7 @@ def lcm(a, b):
     return a * b // gcd(a, b)
 
 def fraction_gcd(x, y):
-    """Computes the greatests common divisor as Fraction
+    """Computes the greatest common divisor as Fraction
     
     Parameters
     ----------
@@ -99,6 +100,15 @@ class Song:
     #mtcson : dict from MTCFeatures
     #krnfilename : filename of the corresponding **kern file
     def __init__(self, mtcsong, krnfilename):
+        """Instantiate an object of class Song.
+
+        Parameters
+        ----------
+        mtcsong : dict
+            Dictionary of feature values and metadata of a song as provided by MTCFeatures
+        krnfilename : str
+            Full file name of a corresponding **kern file.
+        """
         self.mtcsong = copy.deepcopy(mtcsong)
         self.krnfilename = krnfilename
         self.s = self.parseMelody()
@@ -107,9 +117,23 @@ class Song:
         self.add_features()
 
     def getSongLength(self):
+        """Returns the number of notes in the song
+
+        Returns
+        -------
+        int
+            Number of notes in the song
+        """
         return len(self.mtcsong['features']['pitch'])
 
     def getDurationUnit(self):
+        """Returns a unit of note duration that is the greatest common divisor of all note durations.
+
+        Returns
+        -------
+        Fraction
+            Duration unit
+        """
         sf = self.s.flat.notesAndRests
         unit = Fraction(sf[0].duration.quarterLength)
         for n in sf:
@@ -118,6 +142,13 @@ class Song:
 
     #return number of ticks per quarter note
     def getResolution(self) -> int:
+        """Return the number of ticks per quarter note given the duration unit.
+
+        Returns
+        -------
+        int
+            number of ticks per quarter note.
+        """
         unit = self.getDurationUnit()
         #number of ticks is 1 / unit (if that is an integer)
         ticksPerQuarter = unit.denominator / unit.numerator
@@ -128,6 +159,19 @@ class Song:
             return 0
 
     def getOnsets(self):
+        """Returns a list of onsets (ints). Onsets are multiples of the duration unit.
+
+        Returns
+        -------
+        list of int
+            Onset for each note.
+
+        Raises
+        ------
+        OnsetMismatchError
+            Raised if the computed onsets do not match with the onsets as provided in MTCFeatures.
+            These should be the same.
+        """
         ticksPerQuarter = self.getResolution()
         onsets = [int(n.offset * ticksPerQuarter) for n in self.s.flat.notes]
         #check whether same onsets in songfeatures
@@ -140,6 +184,13 @@ class Song:
 
     # s : music21 stream
     def removeGrace(self, s):
+        """Remove all grace notes from the music21 stream.
+
+        Parameters
+        ----------
+        s : music21 Stream
+            Object representing the score of the song.
+        """
         #highest level:
         graceNotes = [n for n in s.recurse().notes if n.duration.isGrace]
         for grace in graceNotes:
@@ -158,6 +209,20 @@ class Song:
         
     # add left padding to partial measure after repeat bar
     def padSplittedBars(self, s):
+        """Add padding to bars that originate from splitting a bar at a repeat sign. The second of the two
+        resulting (partial) bars should have a padding equal to the lenght of the first (partial) bar in 
+        order to obtain correct beatstrength values.
+
+        Parameters
+        ----------
+        s : music21 Stream
+            Object representing the score of the song.
+
+        Returns
+        -------
+        music21 Stream
+            s with padded bars
+        """
         partIds = [part.id for part in s.parts] 
         for partId in partIds: 
             measures = list(s.parts[partId].getElementsByClass('Measure')) 
@@ -168,6 +233,22 @@ class Song:
 
     #N.B. contrary to the function currently in MTCFeatures (nov 2022), do not flatten the stream
     def parseMelody(self):
+        """Converts **kern to music21 Stream and do necessary preprocessing:
+        - pad splitted bars
+        - strip ties
+        - remove grace notes
+        The notes in the resulting score correspond 1-to-1 with the notes in MTCFeatures.
+
+        Returns
+        -------
+        music21 Stream
+            music21 score for the song.
+
+        Raises
+        ------
+        ParseError
+            Raised if the **kern file is unparsable.
+        """
         try:
             s = m21.converter.parse(self.krnfilename)
         except m21.converter.ConverterException:
@@ -180,6 +261,14 @@ class Song:
 
     #Add metric grid
     def create_beatstrength_grid(self):
+        """Creates a vector with for each possible onset the beatstrength. The last onset corresponds to the
+        end of the last note.
+
+        Returns
+        -------
+        list (float)
+            list with beatstrengths. The beatstrenght for onset n is beatstrength_grid[n].
+        """
         beatstrength_grid = []
         unit = Fraction(1, self.getResolution()) #duration of a tick
         s_onsets = m21.converter.parse(self.krnfilename) #original score
@@ -194,11 +283,11 @@ class Song:
         assert beatstrength_grid[self.onsets[-1]] == self.mtcsong['features']['beatstrength'][-1]
         return beatstrength_grid
 
-    #Add syncope features:
-    #syncope (True if syncope)
-    #maxbeatstrength (max beatstrength DURING note)
-    #beatstrength_grid = beatstrength for each onsettick
     def add_features(self):
+        """Adds a few features that are needed for computing pitch vectors. One value for each note.
+        - syncope: True if the note is a syncope (there is a a higher metric weight in the span of the note than at the start of the note).
+        - maxbeatstrength: the highest beatstrenght DURING the note.
+        """
         self.mtcsong['features']['syncope'] = [False] * len(self.mtcsong['features']['pitch'])
         self.mtcsong['features']['maxbeatstrength'] = [0.0] * len(self.mtcsong['features']['pitch'])
         self.mtcsong['features']['beatstrengthgrid'] = self.beatstrength_grid
@@ -212,6 +301,19 @@ class Song:
         self.mtcsong['features']['maxbeatstrength'][-1] = self.mtcsong['features']['beatstrength'][-1]
     
     def getColoredSong(self, colordict):
+        """Create a new music21 stream with notes colored according to `colordict`.
+
+        Parameters
+        ----------
+        colordict : dict
+            The keys are the colors, the values the indices of the notes with that color. E.g. {'red':[0,10,11],'grey':[-1]}
+            colors notes at indices 0, 10, and 11 red, and the last note grey.
+
+        Returns
+        -------
+        music21 Stream
+            music21 Stream.
+        """
         s = self.parseMelody()
         #check for right length #if so, assume notes correspond with features
         assert self.getSongLength() == len(s.flat.notes)
@@ -229,12 +331,31 @@ class Song:
     #\override NoteHead.color -> \once\override NoteHead.color
 
     def repairLyline(self, line):
+        """Corrects possbile error in a line of the Ly export. Note coloring should be done once.
+
+        Parameters
+        ----------
+        line : str
+            a line of a generated lilypond file.
+
+        Returns
+        -------
+        str
+            corrected line
+        """
         line = line.replace("\\override Stem.color","\\once\\override Stem.color")
         line = line.replace("\\override NoteHead.color","\\once\\override NoteHead.color")
         line = line.replace("\\include \"lilypond-book-preamble.ly\"","")
         return line
     
     def repairLy(self, filename):
+        """Go over a lilypond file, and correct the lines (see `self.repairLyline`).
+
+        Parameters
+        ----------
+        filename : str
+            Filename of the lilypond file to repair.
+        """
         with open(filename,'r') as f:
             lines = [self.repairLyline(l) for l in f.readlines()]
         lines = lines + [ f'\paper {{ tagline = "" }}']
@@ -242,6 +363,13 @@ class Song:
             f.writelines(lines)
 
     def insertFilenameLy(self, filename):
+        """Insert a header with the filename into a lilypond source file.
+
+        Parameters
+        ----------
+        filename : str
+            Filename of the lilypond file to process.
+        """
         with open(filename,'r') as f:
             lines = [l for l in f.readlines()]
         with open(filename,'w') as f:
@@ -251,6 +379,26 @@ class Song:
                 f.write(l)
 
     def createColoredPDF(self, colordict, outputpath, filebasename=None, showfilename=True):
+        """Create a pdf with a score with colored notes.
+
+        Parameters
+        ----------
+        colordict : dict
+            The keys are the colors, the values the indices of the notes with that color. E.g. {'red':[0,10,11],'grey':[-1]}
+            colors notes at indices 0, 10, and 11 red, and the last note grey.
+        outputpath : str
+            name of the output directory
+        filebasename : str, default None
+            basename of the pdf file to generate (without .pdf). If None, the identifier of the song as provided by
+            MTCFeatures is used as file name.
+        showfilename : bool, default True
+            Include the filename in the pdf (lilypond opus header).
+
+        Returns
+        -------
+        path-like object
+            Full path of the generated pdf.
+        """
         if filebasename is None:
             filebasename = self.mtcsong['id']
         s = self.getColoredSong(colordict)
@@ -262,15 +410,53 @@ class Song:
         return os.path.join(outputpath, filebasename+'.pdf')
 
     def createColoredPNG(self, colordict, outputpath, filebasenam=None, showfilename=True):
+        """Create a png with a score with colored notes.
+
+        Parameters
+        ----------
+        colordict : dict
+            The keys are the colors, the values the indices of the notes with that color. E.g. {'red':[0,10,11],'grey':[-1]}
+            colors notes at indices 0, 10, and 11 red, and the last note grey.
+        outputpath : str
+            name of the output directory
+        filebasename : str, default None
+            basename of the png file to generate (without .png). If None, the identifier of the song as provided by
+            MTCFeatures is used as file name.
+        showfilename : bool, default True
+            Include the filename in the png (lilypond opus header).
+
+        Returns
+        -------
+        path-like object
+            Full path of the generated png.
+        """
         pdf_fn = self.createColoredPDF(colordict, outputpath, filebasenam, showfilename)
         png_fn = pdf_fn.replace('.pdf','.png')
         output = subprocess.run(['convert', '-density', '100', pdf_fn, '-alpha', 'Remove', '-trim', png_fn], cwd=outputpath, capture_output=True)
         return png_fn
     
     def showColoredPNG(self, colordict, outputpath, filebasename=None, showfilename=True):
+        """Show a png with a score with colored notes. For use in a Jupyter notebook.
+
+        Parameters
+        ----------
+        colordict : dict
+            The keys are the colors, the values the indices of the notes with that color. E.g. {'red':[0,10,11],'grey':[-1]}
+            colors notes at indices 0, 10, and 11 red, and the last note grey.
+        outputpath : str
+            name of the output directory
+        filebasename : str, default None
+            basename of the png file to generate (without .png). If None, the identifier of the song as provided by
+            MTCFeatures is used as file name.
+        showfilename : bool, default True
+            Include the filename in the png (lilypond opus header).
+        """
         png_fn = self.createColoredPNG(colordict, outputpath, filebasename, showfilename)
         display.display(display.Image(png_fn))
 
-    def showPNG(self, outputpath, filenamebase=None, showfilename=True):
-        self.showColoredPNG({}, outputpath, filenamebase, showfilename)
+    def showPNG(self):
+        """Show a png with a score of the song. For use in a Jupyter notebook.
+        """
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            self.showColoredPNG({}, tmpdirname, showfilename=False)
     

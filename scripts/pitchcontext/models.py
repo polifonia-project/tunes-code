@@ -57,7 +57,7 @@ def computeConsonance(
     wpd : WeightedPitchContext
         An instance of the WeightedPitchContext class, containing a weighted pitch context vector for each note.
     combiner : function of two 1D numpy arrays, default=numpy.maximum
-        Combines the consonance of preceeding context and consonance of following context in one value.
+        Combines the consonance of preceding context and consonance of following context in one value.
         Default: take the maximum.
     consonants : list of ints
         Intervals in base40 pitch encoding that are considered consonant.
@@ -65,7 +65,8 @@ def computeConsonance(
     Returns
     -------
     consonance_pre, consonance_post, consonance_context : numpy 1D arrays
-        with a consonance level for each note.
+        with a consonance level for each note, respective the consonance within the preceding context, the
+        consonance within the following context, and the consonance within the full context.
     """
     song_length = len(wpc.ixs)
 
@@ -109,6 +110,22 @@ def computePrePostDistance(
     wpc : PitchContext,
     vectorDist=normalizedCosineDist
 ):
+    """Computes for each note the distance between the preceding and the following context.
+
+    Parameters
+    ----------
+    song : Song
+        Ojbect with song data.
+    wpc : PitchContext
+        Object with pitch context data
+    vectorDist : function, default=normalizedCosineDist
+        Function to compute the distance between two 1D vectors
+
+    Returns
+    -------
+    numpy array
+        1D numpy array with a distance value for each note.
+    """
     res = np.zeros( len(wpc.pitchcontext) )
     for ix in range(len(wpc.pitchcontext)):
         res[ix] = vectorDist(wpc.pitchcontext[ix,:40], wpc.pitchcontext[ix,40:])
@@ -118,6 +135,23 @@ def computeNovelty(
     song: Song,
     wpc : PitchContext,
 ):
+    """Computes for each note the 'novelty' of the following context with respect to the preceding context.
+    Novelty for a pitch is computed as the percentual contribution of the following pitch value to the total
+    of the preceding and following values.
+    The overall novelty value is the average of novelty values of all pitches.
+
+    Parameters
+    ----------
+    song : Song
+        Ojbect with song data.
+    wpc : PitchContext
+        Object with pitch context data
+
+    Returns
+    -------
+    numpy array
+        1D numpy array with a novelty value for each note.
+    """
     novelty = np.zeros( len(wpc.pitchcontext) )
     for ix in range(len(wpc.pitchcontext)):
         total = wpc.pitchcontext[ix,:40] + wpc.pitchcontext[ix,40:]

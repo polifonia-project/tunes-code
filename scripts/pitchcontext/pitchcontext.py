@@ -26,6 +26,9 @@ class PitchContext:
         `beatstrength` : use beatstrength as computed by music21
         `ima` : use inner metric analysis weights (not implemented)
         `imaspect` : use inner metric analysis spectral weights (not implemented)
+    accumulateWeight : boolean, default=False
+        If true, represent the metric weight of a note by the sum of all metric weights
+        in the beatstrength grid in the span of the note.
     len_context_beat : float of (float, float)
         length of the context in beat units, either float or tuple
         (length pre context, length post context) in beat units
@@ -37,11 +40,11 @@ class PitchContext:
         The weight is a linear function of the score distance to the focus note.
         The weight at the onset of the focus note is 1.0.
         The weight at the end of the context is set by `min_distance_weight`.
-        If a tuple is given, first in the tuple refers to preceeding context and
+        If a tuple is given, first in the tuple refers to preceding context and
         second in the tuple to the following context.
     min_distance_weight : float of (float, float), default=0.0
         Distance weight at the border of the context.
-        If a tuple is given, first in the tuple refers to preceeding context and
+        If a tuple is given, first in the tuple refers to preceding context and
         second in the tuple to the following context.
     includeFocus : One of 'none', 'pre', 'post', 'both', default='none'
         Whether to include the focus note in the context
@@ -95,6 +98,7 @@ class PitchContext:
                 'removeRepeats' : True,
                 'syncopes' : False,
                 'metric_weights' : 'beatstrength',
+                'accumulateWeight' : False,
                 'len_context_beat' : None,
                 'use_metric_weights' : True,
                 'use_distance_weights' : True,
@@ -110,6 +114,7 @@ class PitchContext:
             'removeRepeats' : True,
             'syncopes' : False,
             'metric_weights' : 'beatstrength',
+            'accumulateWeight' : False,
             'len_context_beat' : None,
             'use_metric_weights' : True,
             'use_distance_weights' : True,
@@ -122,17 +127,12 @@ class PitchContext:
         return params
     
     def setparams(self, params):
-        """Return a dictionary with default parameters.
-        
+        """Set parameters in `params`
+
         Parameters
         ----------
-        a : string
-            blah.
-    
-        Returns
-        ------
-        b : string
-            blah.
+        params : dict
+            key value pairs for the parameters to change
         """
         for key in params.keys():
             if key not in self.params:
@@ -141,22 +141,20 @@ class PitchContext:
                 self.params[key] = params[key]
 
     def computeWeightedPitch(self):
-        """Return a dictionary with default parameters.
-        
-        Parameters
-        ----------
-        a : string
-            blah.
-    
+        """Computes for every note a pitchvector (base40) with the (metric) weight of the note in the corresponding pitch bin.
+
         Returns
-        ------
-        b : string
-            blah.
+        -------
+        numpy array
+            Dimension is (length of ixs, 40). The first dimension corresponds to the note indices in
+            `ixs`. The second dimension contains the metric weight of the corresponding note for the
+            appropriate pitch in base 40 encoding.
         """
         #put param values in local variables for readibility
         removeRepeats = self.params['removeRepeats']
         syncopes = self.params['syncopes']
         metric_weights = self.params['metric_weights']
+        accumulateWeight = self.params['accumulateWeight']
 
         songinstance = self.song
         song = self.song.mtcsong
@@ -180,7 +178,20 @@ class PitchContext:
         else:
             ixs = list(range(song_length))
 
-        weights = [beatstrength[ix] for ix in ixs]
+        weights = [0]*len(ixs)
+
+        if accumulateWeight:
+            if syncopes:
+                syncopes=False
+                print("Warning: setting accumulateWeight implies syncopes=False.")
+            max_onset = len(beatstrengthgrid)-1
+            #for each note make span of onsets:
+            start_onsets = [onsettick[ix] for ix in ixs]
+            stop_onsets = [onsettick[ix] for ix in ixs[1:]]+[max_onset] #add end of last note
+            for ix, span in enumerate(zip(start_onsets, stop_onsets)):
+                weights[ix] = sum(beatstrengthgrid[span[0]:span[1]])
+        else:
+            weights = [beatstrength[ix] for ix in ixs]
         
         if syncopes:
             for ix, span in enumerate(zip(ixs, ixs[1:])):
@@ -199,17 +210,12 @@ class PitchContext:
         return weightedpitch, ixs
 
     def getBeatinsongFloat(self):
-        """Return a dictionary with default parameters.
-        
-        Parameters
-        ----------
-        a : string
-            blah.
-    
+        """Convert `beatinsong` from Fraction to float
+
         Returns
-        ------
-        b : string
-            blah.
+        -------
+        numpy vector
+            Length is length of `ixs`. numpy vector with beatinsong as float
         """
         song = self.song.mtcsong
         beatinsong_float = np.zeros( len(self.ixs) )
@@ -218,18 +224,15 @@ class PitchContext:
         return beatinsong_float
 
     def computePitchContext(self):   
-        """Return a dictionary with default parameters.
-        
-        Parameters
-        ----------
-        a : string
-            blah.
-    
+        """Compute for each note a pitchcontext vector
+
         Returns
-        ------
-        b : string
-            blah.
-        """ 
+        -------
+        numpy array
+            Dimension is (length of `ixs`, 80). The first dimension corresponds to the note indices in
+            `ixs`. The second dimension correpsonds to 40 pitches in the preceding context [:40] and
+            40 pitches in the following context [40:]. Pitches are in base40 encoding.
+        """
         #put param values in local variables for readibility
         len_context_beat = self.params['len_context_beat']
         use_metric_weights = self.params['use_metric_weights']
@@ -366,19 +369,27 @@ class PitchContext:
         note_ix=None, #report single note. IX in original song, not in ixs
         **features, #any other values to report. key: name, value: array size len(ixs)
     ):
-        """Return a dictionary with default parameters.
-        
+        """Print for each note the values of several features to stdout.
+
+        For each note print
+        - pitch and (metric) weight as computed by `self.computeWeightedPitch`
+        - indices (in `self.ixs`) of notes in the preceding context
+        - indices (in the MTC features) of notes in the preceding context
+        - indices (in `self.ixs`) of notes in the following context
+        - indices (in the MTC features) of notes in the following context
+        - pitches and corresponding weights in the precedings context
+        - pitches and corresponding wieghts in the following context
+        - any other feature provided as keyword argument (see below)
+
         Parameters
         ----------
-        a : string
-            blah.
-    
-        Returns
-        ------
-        b : string
-            blah.
+        note_ix : int, default None
+            Only print the values the note at index `note_ix` in the original melody (not in `self.ixs`).
+        **features  : keyword arguments
+            any other feature to report. The keyword is the name of the features, the value is an 1D array
+            with the same lenght as `self.ixs`.
         """
-        for ix in range(len(self.pitchcontext)):
+        for ix in range(len(self.ixs)):
             if note_ix:
                 if note_ix != self.ixs[ix]: continue
             pre_pitches = []
@@ -393,8 +404,10 @@ class PitchContext:
             post_pitches = [str(p) for p in sorted(post_pitches, key=lambda x: x[1], reverse=True)]
             print("note", self.ixs[ix], "ix:", ix)
             print("  pitch:", self.song.mtcsong['features']['pitch'][self.ixs[ix]], self.song.mtcsong['features']['weights'][self.ixs[ix]])
-            print("  context_pre:", self.contexts_pre[ix])
-            print("  context_post:", self.contexts_post[ix])
+            print("  context_pre (ixs):  ", self.contexts_pre[ix])
+            print("  context_pre (notes):", np.array(self.ixs)[self.contexts_pre[ix]])
+            print("  context_post (ixs):  ", self.contexts_post[ix])
+            print("  context_post (notes):", np.array(self.ixs)[self.contexts_post[ix]])
             print("  pre:", "\n       ".join(pre_pitches))
             print("  post:", "\n        ".join(post_pitches))
             for name in features.keys():

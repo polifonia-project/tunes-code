@@ -53,7 +53,7 @@ def plotArray(array, ixs, xlabel : str, ylabel : str):
     fig = plt.figure(figsize=(14,5))
     plt.ylim(0,np.max(np.nan_to_num(array)) * 1.05)
     plt.plot(array)
-    plt.xlabel(xlabel)
-    plt.ylabel(ylabel)
+    plt.xlabel(xlabel, fontsize='large')
+    plt.ylabel(ylabel, fontsize='large')
     plt.xticks(np.arange(0, len(ixs), 1), [str(i) for i in ixs])
     return fig
