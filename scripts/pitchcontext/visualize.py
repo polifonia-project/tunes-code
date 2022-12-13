@@ -49,11 +49,11 @@ def consonance2colordict(consonance, ixs, percentile, songlength, color='red', g
         greynan
     )
 
-def plotArray(array, ixs, xlabel : str, ylabel : str):
-    fig = plt.figure(figsize=(14,5))
+def plotArray(array, ixs, xlabel : str, ylabel : str, figsize=(10,3)):
+    fig, ax = plt.subplots(figsize=figsize)
     plt.ylim(0,np.max(np.nan_to_num(array)) * 1.05)
     plt.plot(array)
     plt.xlabel(xlabel, fontsize='large')
     plt.ylabel(ylabel, fontsize='large')
     plt.xticks(np.arange(0, len(ixs), 1), [str(i) for i in ixs])
-    return fig
+    return fig, ax
