@@ -409,7 +409,7 @@ class Song:
         output = subprocess.run(["lilypond", os.path.join(outputpath, filebasename+'.ly')], cwd=outputpath, capture_output=True)
         return os.path.join(outputpath, filebasename+'.pdf')
 
-    def createColoredPNG(self, colordict, outputpath, filebasenam=None, showfilename=True):
+    def createColoredPNG(self, colordict, outputpath, filebasename=None, showfilename=True):
         """Create a png with a score with colored notes.
 
         Parameters
@@ -430,7 +430,7 @@ class Song:
         path-like object
             Full path of the generated png.
         """
-        pdf_fn = self.createColoredPDF(colordict, outputpath, filebasenam, showfilename)
+        pdf_fn = self.createColoredPDF(colordict, outputpath, filebasename, showfilename)
         png_fn = pdf_fn.replace('.pdf','.png')
         output = subprocess.run(['convert', '-density', '100', pdf_fn, '-alpha', 'Remove', '-trim', png_fn], cwd=outputpath, capture_output=True)
         return png_fn
@@ -478,4 +478,4 @@ class Song:
         path-like object
             Full path of the generated png.
         """
-        return self.createColoredPNG({}, outputpath, filebasenam=filebasename, showfilename=showfilename)
+        return self.createColoredPNG({}, outputpath, filebasename=filebasename, showfilename=showfilename)
