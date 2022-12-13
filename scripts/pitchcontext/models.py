@@ -10,8 +10,8 @@ from matplotlib import pyplot as plt
 from .pitchcontext import PitchContext
 from .song import Song
 
-from datetime import datetime
-print(__file__, datetime.now().strftime("%H:%M:%S"))
+#from datetime import datetime
+#print(__file__, datetime.now().strftime("%H:%M:%S"))
 
 #distances
 def cosineSim(v1, v2):

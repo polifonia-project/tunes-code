@@ -10,8 +10,8 @@ import music21 as m21
 m21.humdrum.spineParser.flavors['JRP'] = True
 from IPython import display
 
-from datetime import datetime
-print(__file__, datetime.now().strftime("%H:%M:%S"))
+#from datetime import datetime
+#print(__file__, datetime.now().strftime("%H:%M:%S"))
 
 #Exception: computed onsets do not match onsets in MTC
 class OnsetMismatchError(Exception):

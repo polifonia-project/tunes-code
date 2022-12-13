@@ -4,8 +4,8 @@ import numpy as np
 from .song import Song
 from .base40 import base40
 
-from datetime import datetime
-print(__file__, datetime.now().strftime("%H:%M:%S"))
+#from datetime import datetime
+#print(__file__, datetime.now().strftime("%H:%M:%S"))
 
 #weighted pitch contect
 class PitchContext:
@@ -386,7 +386,7 @@ class PitchContext:
         note_ix : int, default None
             Only print the values the note at index `note_ix` in the original melody (not in `self.ixs`).
         **features  : keyword arguments
-            any other feature to report. The keyword is the name of the features, the value is an 1D array
+            any other feature to report. The keyword is the name of the feature, the value is an 1D array
             with the same lenght as `self.ixs`.
         """
         for ix in range(len(self.ixs)):

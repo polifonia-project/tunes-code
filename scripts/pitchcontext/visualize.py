@@ -1,8 +1,8 @@
 import numpy as np
 from matplotlib import pyplot as plt
 
-from datetime import datetime
-print(__file__, datetime.now().strftime("%H:%M:%S"))
+#from datetime import datetime
+#print(__file__, datetime.now().strftime("%H:%M:%S"))
 
 #for repeated pitches:
 #spans would be better for ixs [(start,end),(start,end),...]
