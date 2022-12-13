@@ -249,7 +249,7 @@ class PitchContext:
         
         beatinsong = self.getBeatinsongFloat()
         songlength_beat = float(sum([Fraction(length) for length in song['features']['beatfraction']]))
-        beatinsong_next = np.append(beatinsong[1:],songlength_beat)
+        beatinsong_next = np.append(beatinsong[1:],songlength_beat+beatinsong[0]) #first beatinsong might be negative (upbeat)
         beatinsong_previous = np.insert(beatinsong[:-1],0, 0.0)
 
         if type(len_context_beat) == tuple or type(len_context_beat) == list:
@@ -293,19 +293,22 @@ class PitchContext:
         contexts_post = []
         
         for ix, songix in enumerate(self.ixs):
-            #compute offsets of all ohter notes
+            #compute offsets of all other notes
             beatoffset = beatinsong - beatinsong[ix]
             slicelength = beatinsong_next[ix] - beatinsong[ix]
             previous_slicelength = beatinsong[ix] - beatinsong_previous[ix]
-            beatoffset_next = beatoffset - slicelength
-            beatoffset_previous = beatoffset + previous_slicelength
-            # print("noteix(song):", ixs[ix])
-            # print()
+            beatoffset_next = beatoffset - slicelength #set onset of next note to 0.0
+            beatoffset_previous = beatoffset #set onset of focus note to 0.0
+            # print("noteix(song):", self.ixs[ix])
+            # print("pitch:", song['features']['pitch'][self.ixs[ix]])
             # print("beatinsong", beatinsong)
             # print("beatinsong_next", beatinsong_next)
+            # print('beatinsong_previous', beatinsong_previous)
             # print("beatoffset", beatoffset)
             # print("slicelength", slicelength)
+            # print("previous_slicelength", previous_slicelength)
             # print("beatoffset_next", beatoffset_next)
+            # print("beatoffset_previous", beatoffset_previous)
             #get context for each note
             #N.B. for some reason, np.where returns a tuple e.g: (array([], dtype=int64),)
             #for post, start context at END of focus note (anyway)
@@ -333,7 +336,7 @@ class PitchContext:
 
             contexts_pre.append(context_pre)
             contexts_post.append(context_post)
-
+            
             #compute distance-weights
             if use_distance_weights_pre:
                 distance_weights_pre  = beatoffset_previous[context_pre] * (1.0-min_distance_weight_pre)/len_context_beat_pre + 1.0
@@ -346,8 +349,18 @@ class PitchContext:
                 distance_weights_post = beatoffset_next[context_post] * -(1.0-min_distance_weight_post)/len_context_beat_post + 1.0
                 #set negative weights to zero:
                 distance_weights_post[distance_weights_post<0.0] = 0.0
+                #set max weight to one (if focus note in post context, weight of focus note > 1.0)
+                distance_weights_post[distance_weights_post>1.0] = 1.0
             else:
                 distance_weights_post = np.ones((context_post.shape))
+
+            metric_weights_pre = self.weightedpitch[context_pre]
+            if not use_metric_weights_pre:
+                metric_weights_pre[metric_weights_pre>0] = 1.0
+
+            metric_weights_post = self.weightedpitch[context_post]
+            if not use_metric_weights_post:
+                metric_weights_post[metric_weights_post>0] = 1.0
 
             # print("ix", ix, ixs[ix])
             # print("length_context_pre", length_context_pre)
@@ -356,14 +369,9 @@ class PitchContext:
             # print("distance_weights_post", distance_weights_post)
             #combine context into one vector
 
-            pitchcontext_pre  = np.dot(distance_weights_pre, self.weightedpitch[context_pre])
-            pitchcontext_post = np.dot(distance_weights_post, self.weightedpitch[context_post])
+            pitchcontext_pre  = np.dot(distance_weights_pre, metric_weights_pre)
+            pitchcontext_post = np.dot(distance_weights_post, metric_weights_post)
             #normalize
-            
-            if not use_metric_weights_pre:
-                pitchcontext_pre[pitchcontext_pre>0] = 1.0
-            if not use_metric_weights_post:
-                pitchcontext_post[pitchcontext_post>0] = 1.0
             
             if normalize:
                 pitchcontext_pre /= np.sum(np.abs(pitchcontext_pre),axis=0)
