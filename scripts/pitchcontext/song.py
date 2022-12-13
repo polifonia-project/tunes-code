@@ -460,3 +460,22 @@ class Song:
         with tempfile.TemporaryDirectory() as tmpdirname:
             self.showColoredPNG({}, tmpdirname, showfilename=False)
     
+    def createPNG(self, outputpath, filebasename=None, showfilename=False):
+        """Creates a PNG image of the score.
+
+        Parameters
+        ----------
+        outputpath : str
+            name of the output directory
+        filebasename : str, default None
+            basename of the png file to generate (without .png). If None, the identifier of the song as provided by
+            MTCFeatures is used as file name.
+        showfilename : bool, default True
+            Include the filename in the png (lilypond opus header).
+
+        Returns
+        -------
+        path-like object
+            Full path of the generated png.
+        """
+        return self.createColoredPNG({}, outputpath, filebasenam=filebasename, showfilename=showfilename)
