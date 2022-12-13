@@ -33,8 +33,10 @@ class PitchContext:
         length of the context in beat units, either float or tuple
         (length pre context, length post context) in beat units
         TODO: if len_context_beat='auto', extend context to first note with higher metric weight (or equal if weight = 1.0)
-    use_metric_weights : boolean, default=True
+    use_metric_weights : boolean or (boolean, boolean), default=True
         Whether to weight the pitches in the conext by their metric weight.
+        If a tuple is given, first in the tuple refers to preceding context and
+        second in the tuple to the following context.
     use_distance_weights : boolean or (boolean, boolean), default=True
         If True, weight pithces in the context by their distance to the focus note.
         The weight is a linear function of the score distance to the focus note.
@@ -246,7 +248,7 @@ class PitchContext:
         song = self.song.mtcsong
         
         beatinsong = self.getBeatinsongFloat()
-        songlength_beat = float(Fraction(song['features']['beatinsong'][-1])+Fraction(song['features']['beatfraction'][-1]))
+        songlength_beat = float(sum([Fraction(length) for length in song.mtcsong['features']['beatfraction']]))
         beatinsong_next = np.append(beatinsong[1:],songlength_beat)
         beatinsong_previous = np.insert(beatinsong[:-1],0, 0.0)
 
@@ -259,6 +261,14 @@ class PitchContext:
             len_context_beat_pre = len_context_beat
             len_context_beat_post = len_context_beat
         len_context_beat = None
+
+        if type(use_metric_weights) == tuple or type(use_metric_weights) == list:
+            use_metric_weights_pre = use_metric_weights[0]
+            use_metric_weights_post = use_metric_weights[1]
+        else:
+            use_metric_weights_pre = use_metric_weights
+            use_metric_weights_post = use_metric_weights
+        use_metric_weights = None
 
         if type(use_distance_weights) == tuple or type(use_distance_weights) == list:
             use_distance_weights_pre = use_distance_weights[0]
@@ -350,8 +360,9 @@ class PitchContext:
             pitchcontext_post = np.dot(distance_weights_post, self.weightedpitch[context_post])
             #normalize
             
-            if not use_metric_weights:
+            if not use_metric_weights_pre:
                 pitchcontext_pre[pitchcontext_pre>0] = 1.0
+            if not use_metric_weights_post:
                 pitchcontext_post[pitchcontext_post>0] = 1.0
             
             if normalize:
