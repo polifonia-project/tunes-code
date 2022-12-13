@@ -248,7 +248,7 @@ class PitchContext:
         song = self.song.mtcsong
         
         beatinsong = self.getBeatinsongFloat()
-        songlength_beat = float(sum([Fraction(length) for length in song.mtcsong['features']['beatfraction']]))
+        songlength_beat = float(sum([Fraction(length) for length in song['features']['beatfraction']]))
         beatinsong_next = np.append(beatinsong[1:],songlength_beat)
         beatinsong_previous = np.insert(beatinsong[:-1],0, 0.0)
 
